@@ -27,18 +27,6 @@ library(cowplot)
 library(cmdstanr)
 library(posterior)
 
-#directory for cmdstan installation
-set_cmdstan_path("...")
-
-#general settings for Stan
-rstan::rstan_options(auto_write = TRUE)
-options(mc.cores = parallel::detectCores())
-
-#general MCMC settings
-n_iter = 3000
-n_warm = 1000
-n_chains = 4
-
 #organize data & transform variables
 {
   #exclude problematic cases
@@ -99,16 +87,8 @@ n_chains = 4
   Uni2KY = subset(Uni2, Population =='KY')
   Uni2LY = subset(Uni2, Population =='LY')
 
-  ##Standardizing clutch size and relativizing hatch and nestling mass
+  ##Standardizing
   normFunc = function(x, na.rm=TRUE){(x-mean(x, na.rm=TRUE))/sd(x, na.rm=TRUE)} #standardizing function
-  #Apply function
-  Uni2KY$PClutchSD = normFunc(Uni2KY$PClutch)
-  Uni2LY$PClutchSD = normFunc(Uni2LY$PClutch)
-  #Relative fitness is value divided by mean
-  Uni2KY$PHatchR = (Uni2KY$PHatch/mean(Uni2KY$PHatch, na.rm = TRUE))
-  Uni2KY$NmassR = (Uni2KY$Mass/mean(Uni2KY$Mass, na.rm = TRUE))
-  Uni2LY$PHatchR = (Uni2LY$PHatch/mean(Uni2LY$PHatch, na.rm = TRUE))
-  Uni2LY$NmassR = (Uni2LY$Mass/mean(Uni2LY$Mass, na.rm = TRUE))
 
   ##Standardize environments
   Uni2KY$DateWSD = normFunc(Uni2KY$DateMCW)  #Standardizes across individuals the within-individual metric of date
@@ -145,6 +125,13 @@ n_chains = 4
   Uni2LY$Hatch = Uni2LY$PHatch + 1 #set 0 = 1
 }
 
+#directory for cmdstan installation
+set_cmdstan_path("...")
+
+#general settings for Stan
+rstan::rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
 #custom function for cmdstan posteriors
 extract = function(fit_obj) {
   vars = fit_obj$metadata()$stan_variables
@@ -154,7 +141,6 @@ extract = function(fit_obj) {
     posterior::draws_of(draws[[var_name]], with_chains = FALSE)
   }) |> setNames(vars)
 }
-
 
 #######################################################################
 #Laying attempt plot
@@ -208,7 +194,7 @@ ud_nrm = brm(m_nrm, data = Uni2KY,
                            prior("exponential(2)", class = "sd"),
                            prior("exponential(2)", class = "sd", dpar = "sigma"),
                            prior("lkj(2)", class = "cor")),
-                 warmup = n_warm, iter=n_iter, chains = n_chains,
+             warmup = 500, iter=1500, chains = 4,
                  init = 0, control=list(adapt_delta=0.9, max_treedepth=10) ) 
 saveRDS(ud_nrm,"ud_nrm.RDS")
 
@@ -219,7 +205,7 @@ ud_nrmL = brm(m_nrm, data = Uni2LY,
                        prior("exponential(2)", class = "sd"),
                        prior("exponential(2)", class = "sd", dpar = "sigma"),
                        prior("lkj(2)", class = "cor")),
-             warmup = n_warm, iter=n_iter, chains = n_chains,
+             warmup = 500, iter=1500, chains = 4,
              init = 0, control=list(adapt_delta=0.9, max_treedepth=10) ) 
 saveRDS(ud_nrmL,"ud_nrmL.RDS")
 
@@ -237,7 +223,7 @@ ud_pois = brm(m_pois, data = Uni2KY,
                            prior("normal(0,1)", class = "b"),
                            prior("cauchy(0,1)", class = "sd"),
                            prior("lkj(2)", class = "cor")),
-                 warmup = n_warm, iter=n_iter, chains = n_chains,
+              warmup = 500, iter=1500, chains = 4,
                  inits = 0, control=list(adapt_delta=0.84, max_treedepth=10) ) 
 saveRDS(ud_pois,"ud_pois.RDS")
 
@@ -246,7 +232,7 @@ ud_poisL = brm(m_pois, data = Uni2LY,
                         prior("normal(0,1)", class = "b"),
                         prior("cauchy(0,1)", class = "sd"),
                         prior("lkj(2)", class = "cor")),
-              warmup = n_warm, iter=n_iter, chains = n_chains,
+              warmup = 500, iter=1500, chains = 4,
               inits = 0, control=list(adapt_delta=0.84, max_treedepth=10) ) 
 saveRDS(ud_poisL,"ud_poisL.RDS")
 
@@ -266,7 +252,7 @@ ud_ord = brm(m_c,  data = Uni2KY,
                            prior("exponential(2)", class = "sd"),
                            prior("exponential(2)", class = "sd", dpar = "disc"),
                            prior("lkj(2)", class = "cor")),
-                 warmup = 400, iter=1400, chains = 4,
+                 warmup = 500, iter=1500, chains = 4,
                  init = 0, control=list(adapt_delta=0.90, max_treedepth=10)) 
 saveRDS(ud_ord,"ud_ord.RDS")
 
@@ -277,7 +263,7 @@ ud_ordL = brm(m_c,  data = Uni2LY,
                        prior("exponential(2)", class = "sd"),
                        prior("exponential(2)", class = "sd", dpar = "disc"),
                        prior("lkj(2)", class = "cor")),
-             warmup = 400, iter=1400, chains = 4,
+             warmup = 500, iter=1500, chains = 4,
              init = 0, control=list(adapt_delta=0.90, max_treedepth=10)) 
 saveRDS(ud_ordL,"ud_ordL.RDS")
 
@@ -419,7 +405,7 @@ mv_prior = c(prior("normal(0,1)", class = "Intercept", resp = "Clutch"),
 #remove backend line to use rstan
 ls_ord_KY = brm(m_c + m_p + m_h + m_m + set_rescor(FALSE), data = Uni2KY,
                  prior = mv_prior,
-                 warmup = 400, iter=2000, chains = 4,
+                 warmup = 500, iter=2000, chains = 4,
                  backend="cmdstanr", stan_model_args=list(stanc_options = list("O1")),
                  init = 0, control=list(adapt_delta=0.90, max_treedepth=10)) 
 
@@ -456,10 +442,13 @@ dev.off()
 colfunc = colorRampPalette(c("chartreuse2", "darkgreen"))
 colfunc(3)
 library(ggplot2)
+newdata = list(AttemptSD = c(-1.016, -0.129, 0.758)) #corresponds to attempt 1,2,3
 {
 #clutch size
-cp = conditional_effects(ls_ord_KY, categorical = F, effects = "DateWSD:AttemptSD",
+cp = conditional_effects(ls_ord_KY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Clutch", plot = F)
+plot(cp)
+
 cpp = 
   plot(cp, plot = F)[[1]] + 
   scale_x_continuous(expand=c(0,0), breaks = c(-2,0,2), labels = c("Early", "Average", "Late"))+
@@ -479,7 +468,7 @@ cpp =
   guides(color = 'none', fill = 'none')
 
 #hatchling count
-hp = conditional_effects(ls_ord_KY, categorical = F, effects = "DateWSD:AttemptSD",
+hp = conditional_effects(ls_ord_KY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Hatch", plot = F)
 #subtract 1 added arbitrarily for ordinal model
 hp$`Hatch.Hatch_DateWSD:AttemptSD`$estimate__ = hp$`Hatch.Hatch_DateWSD:AttemptSD`$estimate__ - 1
@@ -488,8 +477,8 @@ hp$`Hatch.Hatch_DateWSD:AttemptSD`$upper__ = hp$`Hatch.Hatch_DateWSD:AttemptSD`$
 hpp = 
   plot(hp, plot = F)[[1]] + 
   scale_x_continuous(expand=c(0,0), breaks = c(-2,0,2), labels = c("Early", "Average", "Late"))+
-  scale_y_continuous(breaks = c(3,4,4,6,7))+
-  coord_cartesian(ylim = c(3,7))+ 
+  scale_y_continuous(breaks = c(3,4,5,6))+
+  coord_cartesian(ylim = c(3,6))+ 
   ylab("Hatchling count\n")+
   xlab("\nDate within season")+
   theme(legend.position = "top",
@@ -505,7 +494,7 @@ hpp =
   guides(color = 'none', fill = 'none')
 
 #hatchling survival
-sp = conditional_effects(ls_ord_KY, categorical = F, effects = "DateWSD:AttemptSD",
+sp = conditional_effects(ls_ord_KY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "PBand", plot = F, conditions = data.frame(Clutch = 1))
 spp = 
   plot(sp, plot = F)[[1]] + 
@@ -526,7 +515,7 @@ spp =
   guides(color = 'none', fill = 'none')
 
 #hatchling mass
-mp = conditional_effects(ls_ord_KY, categorical = F, effects = "DateWSD:AttemptSD",
+mp = conditional_effects(ls_ord_KY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Massavg", plot = F)
 mpp = 
   plot(mp, plot = F)[[1]] + 
@@ -559,22 +548,22 @@ ky_var[ky_var$variable=="Massavg_Intercept","value"] =
 ky_var$site = "KY"
 
 median(var_id[,"Clutch_Intercept"])
-quantile(var_id[,"Clutch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"Clutch_Intercept"], c(0.05,0.95))
 median(var_id[,"Clutch_DateWSD"])
-quantile(var_id[,"Clutch_DateWSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_DateWSD"], c(0.05,0.95))
 median(var_id[,"Clutch_AttemptSD"])
-quantile(var_id[,"Clutch_AttemptSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_AttemptSD"], c(0.05,0.95))
 median(var_id[,"Clutch_DateWSD:AttemptSD"])
-quantile(var_id[,"Clutch_DateWSD:AttemptSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_DateWSD:AttemptSD"], c(0.05,0.95))
 median(var_id[,"disc_Clutch_Intercept"])
-quantile(var_id[,"disc_Clutch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"disc_Clutch_Intercept"], c(0.05,0.95))
 
 median(var_id[,"Hatch_Intercept"])
-quantile(var_id[,"Hatch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"Hatch_Intercept"], c(0.05,0.95))
 median(var_id[,"PBand_Intercept"])
-quantile(var_id[,"PBand_Intercept"], c(0.04,0.94))
+quantile(var_id[,"PBand_Intercept"], c(0.05,0.95))
 median(var_id[,"Massavg_Intercept"] / vc$residual__$sd)
-quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.04,0.94))
+quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.05,0.95))
 
 #######################################################################
 #LY
@@ -584,7 +573,7 @@ quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.04,0.94))
 #remove backend line to use rstan
 ls_ord_LY = brm(m_c + m_p + m_h + m_m + set_rescor(FALSE), data = Uni2LY,
                 prior = mv_prior,
-                warmup = 400, iter = 2000, chains = 4,
+                warmup = 500, iter = 2000, chains = 4,
                 backend="cmdstanr", stan_model_args=list(stanc_options = list("O1")),
                 init = 0, control=list(adapt_delta=0.90, max_treedepth=10)) 
 
@@ -623,7 +612,7 @@ colfunc(3)
 library(ggplot2)
 {
 #clutch size
-cp = conditional_effects(ls_ord_LY, categorical = F, effects = "DateWSD:AttemptSD",
+cp = conditional_effects(ls_ord_LY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Clutch", plot = F)
 cpp = 
   plot(cp, plot = F)[[1]] + 
@@ -644,7 +633,7 @@ cpp =
   guides(color = 'none', fill = 'none')
 
 #hatchling count
-hp = conditional_effects(ls_ord_LY, categorical = F, effects = "DateWSD:AttemptSD",
+hp = conditional_effects(ls_ord_LY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Hatch", plot = F)
 #subtract 1 added arbitrarily for ordinal model
 hp$`Hatch.Hatch_DateWSD:AttemptSD`$estimate__ = hp$`Hatch.Hatch_DateWSD:AttemptSD`$estimate__ - 1
@@ -653,8 +642,8 @@ hp$`Hatch.Hatch_DateWSD:AttemptSD`$upper__ = hp$`Hatch.Hatch_DateWSD:AttemptSD`$
 hpp = 
   plot(hp, plot = F)[[1]] + 
   scale_x_continuous(expand=c(0,0), breaks = c(-2,0,2), labels = c("Early", "Average", "Late"))+
-  scale_y_continuous(breaks = c(3,4,4,6,7))+
-  coord_cartesian(ylim = c(3,7))+ 
+  scale_y_continuous(breaks = c(3,4,5,6))+
+  coord_cartesian(ylim = c(3,6))+ 
   ylab("Hatchling count\n")+
   xlab("\nDate within season")+
   theme(legend.position = "top",
@@ -670,7 +659,7 @@ hpp =
   guides(color = 'none', fill = 'none')
 
 #hatchling survival
-sp = conditional_effects(ls_ord_LY, categorical = F, effects = "DateWSD:AttemptSD",
+sp = conditional_effects(ls_ord_LY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "PBand", plot = F, conditions = data.frame(Clutch = 1))
 spp = 
   plot(sp, plot = F)[[1]] + 
@@ -691,7 +680,7 @@ spp =
   guides(color = 'none', fill = 'none')
 
 #hatchling mass
-mp = conditional_effects(ls_ord_LY, categorical = F, effects = "DateWSD:AttemptSD",
+mp = conditional_effects(ls_ord_LY, categorical = F, int_conditions = newdata, effects = "DateWSD:AttemptSD",
                          prob = 0.9, resp = "Massavg", plot = F)
 mpp = 
   plot(mp, plot = F)[[1]] + 
@@ -724,22 +713,22 @@ ly_var[ly_var$variable=="Massavg_Intercept","value"] =
 ly_var$site = "LY"
 
 median(var_id[,"Clutch_Intercept"])
-quantile(var_id[,"Clutch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"Clutch_Intercept"], c(0.05,0.95))
 median(var_id[,"Clutch_DateWSD"])
-quantile(var_id[,"Clutch_DateWSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_DateWSD"], c(0.05,0.95))
 median(var_id[,"Clutch_AttemptSD"])
-quantile(var_id[,"Clutch_AttemptSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_AttemptSD"], c(0.05,0.95))
 median(var_id[,"Clutch_DateWSD:AttemptSD"])
-quantile(var_id[,"Clutch_DateWSD:AttemptSD"], c(0.04,0.94))
+quantile(var_id[,"Clutch_DateWSD:AttemptSD"], c(0.05,0.95))
 median(var_id[,"disc_Clutch_Intercept"])
-quantile(var_id[,"disc_Clutch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"disc_Clutch_Intercept"], c(0.05,0.95))
 
 median(var_id[,"Hatch_Intercept"])
-quantile(var_id[,"Hatch_Intercept"], c(0.04,0.94))
+quantile(var_id[,"Hatch_Intercept"], c(0.05,0.95))
 median(var_id[,"PBand_Intercept"])
-quantile(var_id[,"PBand_Intercept"], c(0.04,0.94))
+quantile(var_id[,"PBand_Intercept"], c(0.05,0.95))
 median(var_id[,"Massavg_Intercept"] / vc$residual__$sd)
-quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.04,0.94))
+quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.05,0.95))
 
 
 #######################################################################
@@ -747,12 +736,12 @@ quantile(var_id[,"Massavg_Intercept"] / vc$residual__$sd, c(0.04,0.94))
 #######################################################################
 
 #compare mean clutch size
-pLY = rowSums(fitted(ls_ord_KY, newdata = data.frame(DateWSD = 0, AttemptSD = 0), 
+pKY = rowSums(fitted(ls_ord_KY, newdata = data.frame(DateWSD = 0, AttemptSD = 0), 
               resp = "Clutch", re_formula = .~ NULL, summary = F)[,1,] * 1:9)
 pLY = rowSums(fitted(ls_ord_LY, newdata = data.frame(DateWSD = 0, AttemptSD = 0), 
               resp = "Clutch", re_formula = .~ NULL, summary = F)[,1,] * 1:7)
-diffm = pLY - pLY
-mean(diffm); quantile(diffm, c(0.04,0.94))
+diffm = pKY - pLY
+mean(diffm); quantile(diffm, c(0.05,0.95))
 
 #compare slopes
 postKY = posterior_samples(ls_ord_KY)
@@ -760,9 +749,9 @@ postLY = posterior_samples(ls_ord_LY)
 diff1 = postLY$b_Clutch_DateWSD - postKY$b_Clutch_DateWSD
 diff2 = postLY$b_Clutch_AttemptSD - postKY$b_Clutch_AttemptSD 
 diff3 = postLY$`b_Clutch_DateWSD:AttemptSD` - postKY$`b_Clutch_DateWSD:AttemptSD`
-mean(diff1); quantile(diff1, c(0.04,0.94)); sum(diff1<0)/length(diff1)
-mean(diff2); quantile(diff2, c(0.04,0.94)); sum(diff2>0)/length(diff2)
-mean(diff3); quantile(diff3, c(0.04,0.94)); sum(diff3<0)/length(diff3)
+mean(diff1); quantile(diff1, c(0.05,0.95)); sum(diff1<0)/length(diff1)
+mean(diff2); quantile(diff2, c(0.05,0.95)); sum(diff2>0)/length(diff2)
+mean(diff3); quantile(diff3, c(0.05,0.95)); sum(diff3<0)/length(diff3)
 
 #combine plots
 pp_ky = readRDS("pp_ky.RDS")
@@ -802,7 +791,7 @@ var.p =
         panel.grid.minor = element_blank())+
   guides(fill = 'none', color = 'none')
 
-ggsave("var_p.png", var.p, dpi = 600, height = 7, width = 4.4, units = "in")
+ggsave("var_p.png", var.p, dpi = 600, height = 7, width = 5.5, units = "in")
 
 library(grid)
 v_b = plot_grid(nullGrob(), pp_both, nullGrob(), ncol = 1, rel_heights = c(0.04,0.9,0.04))
@@ -822,7 +811,7 @@ dev.off()
 
 #prepare data for Stan
 df = Uni2KY[,c("Clutch","Hatch", "PBand", "Mass_avg", "Year", 
-               "DateWSD", "Attempt", "AttemptSD", "Fband", "NageCent")]
+               "DateWSD", "AttemptSD", "Fband")]
 df = na.omit(df)
 df$id = as.integer(factor(df$Fband, levels=unique(df$Fband)))
 df$year_id = as.integer(factor(df$Year, levels=unique(df$Year)))
@@ -858,7 +847,7 @@ stan_data_KY = list(I = length(unique(df$Fband)), # subjects
 #Lundy###################################################
 
 df = Uni2LY[,c("Clutch","Hatch", "PBand", "Mass_avg", "Year", 
-               "DateWSD", "Attempt", "AttemptSD", "Fband", "NageCent")]
+               "DateWSD", "AttemptSD", "Fband")]
 df = na.omit(df)
 df$id = as.integer(factor(df$Fband, levels=unique(df$Fband)))
 df$year_id = as.integer(factor(df$Year, levels=unique(df$Year)))
@@ -915,7 +904,7 @@ m_NLSds = cmdstan_model(stan_file = "NLS clutch_cumord_ds.stan",
 #Kentucky#################################################
 fitKY = m_NLS$sample(
         data = stan_data_KY,
-        iter_sampling = 400,
+        iter_sampling = 500,
         iter_warmup = 1000,
         init = 1e-4,
         chains = 4,  
@@ -923,7 +912,8 @@ fitKY = m_NLS$sample(
         adapt_delta = 0.80,
         refresh = 10) 
 
-saveRDS(fitKY, "NLS_KY_m.RDS")
+postKY = extract(fitKY)
+saveRDS(postKY, "NLS_KY_m.RDS")
 launch_shinystan(fitKY)
 
 #robustness checks
@@ -932,7 +922,7 @@ launch_shinystan(fitKY)
 #check if inclusion of RN slopes is warranted
 fitKYf = m_NLSf$sample(
   data = stan_data_KY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -944,8 +934,8 @@ NLS_KYf = as_draws_rvars(fitKYf$draws())
 saveRDS(NLS_KYf, "NLS_KYf_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ky = data.frame(
            c(apply(draws_of(NLS_KYf$b_h), 2, sum_fun),
            apply(draws_of(NLS_KYf$b_s), 2, sum_fun),
@@ -961,7 +951,7 @@ write.csv(q_ky, "fullcoef_qky.csv")
 #check if exclusion of adjusted effects is warranted
 fitKYua = m_NLSua$sample(
   data = stan_data_KY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -973,24 +963,24 @@ NLS_KYua = as_draws_rvars(fitKYua$draws())
 saveRDS(NLS_KYua, "NLS_KYua_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ky = data.frame(
-  c(apply(draws_of(NLS_KY$b_h) - draws_of(NLS_KYua$b_h), 2, sum_fun),
-    apply(draws_of(NLS_KY$b_s) - draws_of(NLS_KYua$b_s), 2, sum_fun),
-    apply(draws_of(NLS_KY$b_m) - draws_of(NLS_KYua$b_m), 2, sum_fun)))
+  c(apply(postKY$b_h - draws_of(NLS_KYua$b_h), 2, sum_fun),
+    apply(postKY$b_s - draws_of(NLS_KYua$b_s), 2, sum_fun),
+    apply(postKY$b_m - draws_of(NLS_KYua$b_m), 2, sum_fun)))
 write.csv(b_ky, "coefdiff_bky.csv")
 
 q_ky = data.frame(
-  c(apply(draws_of(NLS_KY$q_h) - draws_of(NLS_KYua$q_h), 2, sum_fun),
-    apply(draws_of(NLS_KY$q_s) - draws_of(NLS_KYua$q_s), 2, sum_fun),
-    apply(draws_of(NLS_KY$q_m) - draws_of(NLS_KYua$q_m), 2, sum_fun)))
+  c(apply(postKY$q_h - draws_of(NLS_KYua$q_h), 2, sum_fun),
+    apply(postKY$q_s - draws_of(NLS_KYua$q_s), 2, sum_fun),
+    apply(postKY$q_m - draws_of(NLS_KYua$q_m), 2, sum_fun)))
 write.csv(q_ky, "coefdiff_qky.csv")
 
 #check for date effects on selection
 fitKYd = m_NLSds$sample(
   data = stan_data_KY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -1002,8 +992,8 @@ NLS_KYd = as_draws_rvars(fitKYd$draws())
 saveRDS(NLS_KYd, "NLS_KYd_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ky = data.frame(
   c(apply(draws_of(NLS_KYd$db_h), 2, sum_fun),
     apply(draws_of(NLS_KYd$db_s), 2, sum_fun),
@@ -1020,7 +1010,7 @@ write.csv(q_ky, "coefd_qky.csv")
 #Lundy#################################################
 fitLY = m_NLS$sample(
   data = stan_data_LY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -1028,7 +1018,8 @@ fitLY = m_NLS$sample(
   adapt_delta = 0.80,
   refresh = 10) 
 
-saveRDS(fitLY, "NLS_LY_m.RDS")
+postLY = extract(fitLY)
+saveRDS(postLY, "NLS_LY_m.RDS")
 launch_shinystan(fitLY)
 
 #robustness checks
@@ -1036,7 +1027,7 @@ launch_shinystan(fitLY)
 #check if inclusion of RN slopes is warranted
 fitLYf = m_NLSf$sample(
   data = stan_data_LY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -1048,8 +1039,8 @@ NLS_LYf = as_draws_rvars(fitLYf$draws())
 saveRDS(NLS_LYf, "NLS_LYf_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ly = data.frame(
   c(apply(draws_of(NLS_LYf$b_h), 2, sum_fun),
     apply(draws_of(NLS_LYf$b_s), 2, sum_fun),
@@ -1065,7 +1056,7 @@ write.csv(q_ly, "fullcoef_qly.csv")
 #check if exclusion of adjusted effects is warranted
 fitLYua = m_NLSua$sample(
   data = stan_data_LY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -1077,24 +1068,24 @@ NLS_LYua = as_draws_rvars(fitLYua$draws())
 saveRDS(NLS_LYua, "NLS_LYua_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ly = data.frame(
-  c(apply(draws_of(NLS_LY$b_h) - draws_of(NLS_LYua$b_h), 2, sum_fun),
-    apply(draws_of(NLS_LY$b_s) - draws_of(NLS_LYua$b_s), 2, sum_fun),
-    apply(draws_of(NLS_LY$b_m) - draws_of(NLS_LYua$b_m), 2, sum_fun)))
+  c(apply(postLY$b_h - draws_of(NLS_LYua$b_h), 2, sum_fun),
+    apply(postLY$b_s - draws_of(NLS_LYua$b_s), 2, sum_fun),
+    apply(postLY$b_m - draws_of(NLS_LYua$b_m), 2, sum_fun)))
 write.csv(b_ly, "coefdiff_bly.csv")
 
 q_ly = data.frame(
-  c(apply(draws_of(NLS_LY$q_h) - draws_of(NLS_LYua$q_h), 2, sum_fun),
-    apply(draws_of(NLS_LY$q_s) - draws_of(NLS_LYua$q_s), 2, sum_fun),
-    apply(draws_of(NLS_LY$q_m) - draws_of(NLS_LYua$q_m), 2, sum_fun)))
+  c(apply(postLY$q_h - draws_of(NLS_LYua$q_h), 2, sum_fun),
+    apply(postLY$q_s - draws_of(NLS_LYua$q_s), 2, sum_fun),
+    apply(postLY$q_m - draws_of(NLS_LYua$q_m), 2, sum_fun)))
 write.csv(q_ly, "coefdiff_qly.csv")
 
 #check for date effects on selection
 fitLYd = m_NLSds$sample(
   data = stan_data_LY,
-  iter_sampling = 400,
+  iter_sampling = 500,
   iter_warmup = 1000,
   init = 1e-4,
   chains = 4,  
@@ -1106,8 +1097,8 @@ NLS_LYd = as_draws_rvars(fitLYd$draws())
 saveRDS(NLS_LYd, "NLS_LYd_m.RDS")
 
 sum_fun = function(x) {return(c(paste0(round(median(x),2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[1],2), 
-                                       ",", round(quantile(x, c(0.24,0.94))[2],2))))}
+                                       ",", round(quantile(x, c(0.05,0.95))[1],2), 
+                                       ",", round(quantile(x, c(0.05,0.95))[2],2))))}
 b_ly = data.frame(
   c(apply(draws_of(NLS_LYd$db_h), 2, sum_fun),
     apply(draws_of(NLS_LYd$db_s), 2, sum_fun),
@@ -1126,10 +1117,8 @@ write.csv(q_ly, "coefd_qly.csv")
 ###########################################################
 
 #extract posteriors
-NLS_KY = readRDS("NLS_KY_m.RDS")
-NLS_LY = readRDS("NLS_LY_m.RDS")
-samplesKY = extract(NLS_KY)
-samplesLY = extract(NLS_LY)
+samplesKY = readRDS("NLS_KY_m.RDS")
+samplesLY = readRDS("NLS_LY_m.RDS")
 
 #visualize the distributions of random intercepts and residuals
 muKY = apply(samplesKY$I_c[,,1],2, median)
@@ -1229,10 +1218,9 @@ ggplot(ppred, aes(x = Var2, y = value, group = Var1))+
 ###########################################################
 
 #extract posteriors
-NLS_KY = readRDS("NLS_KY_m.RDS")
-NLS_LY = readRDS("NLS_LY_m.RDS")
-samplesKY = extract(NLS_KY)
-samplesLY = extract(NLS_LY)
+samplesKY = readRDS("NLS_KY_m.RDS")
+samplesLY = readRDS("NLS_LY_m.RDS")
+
 
 ########################################################
 #Kentucky
@@ -1428,9 +1416,9 @@ sd_selKY = data.frame(sd_m = apply(samplesKY$I_c[,,1],1, FUN=sd),
 betas_sd_hatchKY = betas_hatchKY * sd_selKY[,1:2]
 betas_sd_surviveKY = betas_surviveKY * sd_selKY[,1:2]
 betas_sd_massKY = betas_massKY  * sd_selKY[,1:2] 
-gammas_sd_hatchKY = gammas_hatchKY * sd_selKY[,3:4]
-gammas_sd_surviveKY = gammas_surviveKY * sd_selKY[,3:4]
-gammas_sd_massKY = gammas_massKY * sd_selKY[,3:4]
+gammas_sd_hatchKY = gammas_hatchKY * sd_selKY[,3:5]
+gammas_sd_surviveKY = gammas_surviveKY * sd_selKY[,3:5]
+gammas_sd_massKY = gammas_massKY * sd_selKY[,3:5]
 
 #total selection gradients
 
@@ -1476,7 +1464,7 @@ for(i in 1:nrow(gammas_hatchKY)){
   gammas_totalKY[i,] =
     c(Gam_tot[1,1],Gam_tot[2,2],Gam_tot[lower.tri(Gam_tot)][1])
 }
-gammas_sd_totalKY = gammas_totalKY * sd_selKY[,3:4]
+gammas_sd_totalKY = gammas_totalKY * sd_selKY[,3:5]
 
 #summarize
 selection_KY =
@@ -1484,57 +1472,57 @@ selection_KY =
                      paste0("",colnames(gammas_sd_massKY))),
              h_KY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_hatchKY,2,median),2)," (",
-                             round(apply(betas_sd_hatchKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_hatchKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_hatchKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_hatchKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_hatchKY,2,median),2)," (",
-                             round(apply(gammas_sd_hatchKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_hatchKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_hatchKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_hatchKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              s_KY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_surviveKY,2,median),2)," (",
-                             round(apply(betas_sd_surviveKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_surviveKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_surviveKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_surviveKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_surviveKY,2,median),2)," (",
-                             round(apply(gammas_sd_surviveKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_surviveKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_surviveKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_surviveKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              m_KY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_massKY,2,median),2)," (",
-                             round(apply(betas_sd_massKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_massKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_massKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_massKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_massKY,2,median),2)," (",
-                             round(apply(gammas_sd_massKY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_massKY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_massKY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_massKY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              tot_KY = c("median (90% CI)", 
                         paste0(round(apply(betas_sd_totalKY,2,median),2)," (",
-                               round(apply(betas_sd_totalKY,2,quantile,c(0.04,0.94))[1,],2),
-                               ",", round(apply(betas_sd_totalKY,2,quantile,c(0.04,0.94))[2,],2),
+                               round(apply(betas_sd_totalKY,2,quantile,c(0.05,0.95))[1,],2),
+                               ",", round(apply(betas_sd_totalKY,2,quantile,c(0.05,0.95))[2,],2),
                                ")"),
                         paste0(round(apply(gammas_sd_totalKY,2,median),2)," (",
-                               round(apply(gammas_sd_totalKY,2,quantile,c(0.04,0.94))[1,],2),
-                               ",", round(apply(gammas_sd_totalKY,2,quantile,c(0.04,0.94))[2,],2),
+                               round(apply(gammas_sd_totalKY,2,quantile,c(0.05,0.95))[1,],2),
+                               ",", round(apply(gammas_sd_totalKY,2,quantile,c(0.05,0.95))[2,],2),
                                ")")))
 
 #save
 write.csv(selection_KY,"selection_KY.csv")
 
 #posterior probs for component-specific selection
-apply(betas_sd_hatchKY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_hatchKY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(betas_sd_surviveKY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_surviveKY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(betas_sd_massKY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_massKY, 2, FUN = function(x) sum(x>0)/length(x))
+apply(betas_sd_hatchKY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_hatchKY, 2,  FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(betas_sd_surviveKY, 2,  FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_surviveKY, 2,  FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(betas_sd_massKY, 2,  FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_massKY, 2,  FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
 
 #summarize total gradients
 apply(betas_sd_totalKY, 2, median)
-apply(betas_sd_totalKY, 2, quantile, c(0.04,0.94))
+apply(betas_sd_totalKY, 2, quantile, c(0.05,0.95))
 apply(gammas_sd_totalKY, 2, median)
-apply(gammas_sd_totalKY, 2, quantile, c(0.04,0.94))
+apply(gammas_sd_totalKY, 2, quantile, c(0.05,0.95))
 
 ########################################################
 #Lundy
@@ -1724,9 +1712,9 @@ sd_selLY = data.frame(sd_m = apply(samplesLY$I_c[,,1],1, FUN=sd),
 betas_sd_hatchLY = betas_hatchLY * sd_selLY[,1:2]
 betas_sd_surviveLY = betas_surviveLY * sd_selLY[,1:2]
 betas_sd_massLY = betas_massLY  * sd_selLY[,1:2] 
-gammas_sd_hatchLY = gammas_hatchLY * sd_selLY[,3:4]
-gammas_sd_surviveLY = gammas_surviveLY * sd_selLY[,3:4]
-gammas_sd_massLY = gammas_massLY * sd_selLY[,3:4]
+gammas_sd_hatchLY = gammas_hatchLY * sd_selLY[,3:5]
+gammas_sd_surviveLY = gammas_surviveLY * sd_selLY[,3:5]
+gammas_sd_massLY = gammas_massLY * sd_selLY[,3:5]
 
 #total selection gradients
 
@@ -1772,7 +1760,7 @@ for(i in 1:nrow(gammas_hatchLY)){
   gammas_totalLY[i,] =
     c(Gam_tot[1,1],Gam_tot[2,2],Gam_tot[lower.tri(Gam_tot)][1])
 }
-gammas_sd_totalLY = gammas_totalLY * sd_selLY[,3:4]
+gammas_sd_totalLY = gammas_totalLY * sd_selLY[,3:5]
 
 #summarize
 selection_LY =
@@ -1780,57 +1768,57 @@ selection_LY =
                      paste0("",colnames(gammas_sd_massLY))),
              h_LY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_hatchLY,2,median),2)," (",
-                             round(apply(betas_sd_hatchLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_hatchLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_hatchLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_hatchLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_hatchLY,2,median),2)," (",
-                             round(apply(gammas_sd_hatchLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_hatchLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_hatchLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_hatchLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              s_LY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_surviveLY,2,median),2)," (",
-                             round(apply(betas_sd_surviveLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_surviveLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_surviveLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_surviveLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_surviveLY,2,median),2)," (",
-                             round(apply(gammas_sd_surviveLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_surviveLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_surviveLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_surviveLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              m_LY = c("median (90% CI)", 
                       paste0(round(apply(betas_sd_massLY,2,median),2)," (",
-                             round(apply(betas_sd_massLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(betas_sd_massLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(betas_sd_massLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(betas_sd_massLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")"),
                       paste0(round(apply(gammas_sd_massLY,2,median),2)," (",
-                             round(apply(gammas_sd_massLY,2,quantile,c(0.04,0.94))[1,],2),
-                             ",", round(apply(gammas_sd_massLY,2,quantile,c(0.04,0.94))[2,],2),
+                             round(apply(gammas_sd_massLY,2,quantile,c(0.05,0.95))[1,],2),
+                             ",", round(apply(gammas_sd_massLY,2,quantile,c(0.05,0.95))[2,],2),
                              ")")),
              tot_LY = c("median (90% CI)", 
                         paste0(round(apply(betas_sd_totalLY,2,median),2)," (",
-                               round(apply(betas_sd_totalLY,2,quantile,c(0.04,0.94))[1,],2),
-                               ",", round(apply(betas_sd_totalLY,2,quantile,c(0.04,0.94))[2,],2),
+                               round(apply(betas_sd_totalLY,2,quantile,c(0.05,0.95))[1,],2),
+                               ",", round(apply(betas_sd_totalLY,2,quantile,c(0.05,0.95))[2,],2),
                                ")"),
                         paste0(round(apply(gammas_sd_totalLY,2,median),2)," (",
-                               round(apply(gammas_sd_totalLY,2,quantile,c(0.04,0.94))[1,],2),
-                               ",", round(apply(gammas_sd_totalLY,2,quantile,c(0.04,0.94))[2,],2),
+                               round(apply(gammas_sd_totalLY,2,quantile,c(0.05,0.95))[1,],2),
+                               ",", round(apply(gammas_sd_totalLY,2,quantile,c(0.05,0.95))[2,],2),
                                ")")))
 
 #save
 write.csv(selection_LY,"selection_LY.csv")
 
 #posterior probs for component-specific selection
-apply(betas_sd_hatchLY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_hatchLY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(betas_sd_surviveLY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_surviveLY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(betas_sd_massLY, 2, FUN = function(x) sum(x>0)/length(x))
-apply(gammas_sd_massLY, 2, FUN = function(x) sum(x>0)/length(x))
+apply(betas_sd_hatchLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_hatchLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(betas_sd_surviveLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_surviveLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(betas_sd_massLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
+apply(gammas_sd_massLY, 2, FUN = function(x) sum(sign(x) == sign(median(x)))/length(x))
 
 #summarize total gradients
 apply(betas_sd_totalLY, 2, median)
-apply(betas_sd_totalLY, 2, quantile, c(0.04,0.94))
+apply(betas_sd_totalLY, 2, quantile, c(0.05,0.95))
 apply(gammas_sd_totalLY, 2, median)
-apply(gammas_sd_totalLY, 2, quantile, c(0.04,0.94))
+apply(gammas_sd_totalLY, 2, quantile, c(0.05,0.95))
 
 
 ##############################################################
@@ -1879,7 +1867,7 @@ ldf$variable2 = factor(ldf$variable, levels =
 #plot
 NLS_sdplot =
   ggplot(ldf, aes(x = value, y = variable2, color = pop, group = interaction(fit2,pop)) )+
-  stat_pointinterval(.width=c(0.9), size = 4, position = position_dodge(-0.4))+
+  stat_pointinterval(.width=c(0.9), size = 5, position = position_dodge(-0.5))+
   facet_wrap(. ~ fit2, nrow = 1)+
   coord_cartesian(xlim=c(-0.2,0.2))+
   scale_y_discrete(limits = rev(levels(ldf$variable2)),
@@ -1888,7 +1876,7 @@ NLS_sdplot =
                               'm.2' = parse(text=TeX('$\\gamma_{mu_0}$')),
                               'v.2' = parse(text=TeX('$\\gamma_{sigma_0}$')),
                               'm.v' = parse(text=TeX('$\\gamma_{mu_0 \\cdot \\sigma_0}$'))))+
-  geom_vline(xintercept= 0, linetype = "dashed", size = 0.74)+
+  geom_vline(xintercept= 0, linetype = "dashed", size = 0.75)+
   xlab("\nStandardized selection gradients on clutch sizes (median +/- 90% CI)")+
   labs(color = "Population")+
   scale_fill_manual(values=c("deeppink1","purple"))+
@@ -1907,632 +1895,193 @@ NLS_sdplot =
 
 ggsave("NLS_sdplot_tot.png", NLS_sdplot, height = 3, width = 8)
 
-#remove total gradient from plot
-ldf2 = ldf[ldf$fit2!="total",]
-
-#plot
-NLS_sdplot2 =
-  ggplot(ldf2, aes(x = value, y = variable2, color = pop, group = interaction(fit2,pop)) )+
-  stat_pointinterval(.width=c(0.9), size = 4, position = position_dodge(-0.4))+
-  facet_wrap(. ~ fit2, nrow = 1)+
-  coord_cartesian(xlim=c(-0.22,0.22))+
-  scale_y_discrete(limits = rev(levels(ldf$variable2)),
-                   labels = c('m' = parse(text=TeX('$\\beta_{mu_0}$')),
-                              'v' = parse(text=TeX('$\\beta_{sigma_0}$')),
-                              'm.2' = parse(text=TeX('$\\gamma_{mu_0}$')),
-                              'v.2' = parse(text=TeX('$\\gamma_{sigma_0}$')),
-                              'm.v' = parse(text=TeX('$\\gamma_{mu_0 \\cdot \\sigma_0}$'))))+
-  geom_vline(xintercept= 0, linetype = "dashed", size = 0.74)+
-  xlab("\nStandardized selection gradients on clutch size reaction norms (median +/- 90% CI)")+
-  labs(color = "Population")+
-  scale_fill_manual(values=c("deeppink1","purple"))+
-  scale_color_manual(values=c("deeppink1","purple"))+
-  theme(legend.title = element_text(face = "bold"),
-        legend.position = "top",
-        axis.title.y = element_blank(),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_text(face = "bold"),
-        panel.border=element_rect(fill=NA,color="black", size=1, linetype="solid"),
-        panel.background= element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.spacing = unit(2, "lines"),
-        plot.margin = margin(0.1,0.1,0.1,0.3,unit = "in"))
-
-ggsave("NLS_sdplot.png", NLS_sdplot2, height = 4, width = 8)
-
-
 #############################################################
 #Plot selection surfaces
 #############################################################
 
-#predict expected fitness for each female
-
-#hatchling plot
+#combo plot
+library(plot3D)
+png("surface_KY.png", units = "in", width = 8, height = 5, res = 600)
+par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(2,3))
 
 #KY
 {
+  sd_m = median(samplesKY$sd_I_c[,1])
+  sd_v = median(samplesKY$sd_I_c[,2])
   m_blup = apply(samplesKY$I_c[,,1], 2, median)
-  v_blup =  apply(samplesKY$I_c[,,2], 2, median)
+  m_blup = m_blup / sd_m
+  v_blup = apply(samplesKY$I_c[,,2], 2, median)
+  v_blup = v_blup / sd_v
   
+  hb = apply(betas_sd_hatchKY,2,median)
+  hq = apply(gammas_sd_hatchKY,2,median)
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
-      
-      m * median(samplesKY$b_h[,1]) + #linear selection coef
-        v * median(samplesKY$b_h[,2]) + #inverse scale for disc
-        m^2 * median(samplesKY$q_h[,1]) + #nonlin selection coef
-        v^2 * median(samplesKY$q_h[,2]) +
-        m * v * median(samplesKY$q_h[,3]) #inverse scale disc
+      mean(stan_data_KY$hatch - 1)+
+        m * hb[1] + #linear selection coef
+        v *  hb[2] + 
+        m^2 * hq[1] + #nonlin selection coef
+        v^2 * hq[2] +
+        m * v * hq[3] 
     )  
-    nthres = stan_data_KY$nthres_hatch
-    disc = median(exp(samplesKY$int_h))
-    p = matrix(NA, nrow = length(eta), ncol = nthres+1)
-    for(j in 1:nthres){
-      if(j == 1){p[,j] = logistic( disc * (median(samplesKY$mu_h_0[,j]) - eta) ) }
-      else p[,j] = logistic( disc * (median(samplesKY$mu_h_0[,j]) - eta) ) - 
-          logistic( disc * (median(samplesKY$mu_h_0[,j-1]) - eta) )
-    }
-    p[,nthres+1] = 1 - rowSums(p[,1:nthres])
-    
-    #predict expected hatchling counts
-    eggcount = seq(1:(nthres+1)) #total number of eggs possible
-    W = apply(p, 1, FUN = function(x) sum(x * eggcount) - 1) #-1 for original scale
+    W = eta
     return(W) #mean fitness 
   }
-  
   w_blup = Wh(m_blup,v_blup)
-  
-  #extrapolated landscape
-  sd_m = median(samplesKY$sd_I_c[,1])
-  sd_v = median(samplesKY$sd_I_c[,2])
-  m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
   w = outer(X = m, Y = v, FUN = Wh)
+  pop = seq(min(w_blup),max(w_blup),0.05)
   
-  #observed landscape
-  m2 = seq(min(m_blup) - 0.04 , max(m_blup) + 0.04, by = 0.04)
-  v2 = seq(min(v_blup) - 0.1 , max(v_blup) + 0.1, by = 0.1)
-  w2 =  outer(X = m2, Y = v2, FUN = Wh)
-  
-  pop = seq(min(w_blup),max(w_blup),0.04)
-  
-  library(plot3D)
-  png("surface_h_KY.png", units = "in", width = 10, height = 4, res = 600)
-  par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(1,2))
-  wd3=Wh(m, v = 0)
-  colr = colorRampPalette(c("white","darkorchid4"))
-  colr2 = colorRampPalette(c("white","darkorchid1"))
-  persp3D(x = m, y = v, z = w - 0.14, lwd = 0.4, border = NA, bty = "u",
+  colr = colorRampPalette(c("white","deeppink1"))
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
           col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nhatchling success",
-          label.rotation = list(z = 90), phi = 30, theta = 300,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-  persp3D(x = m2, y = v2, z = w2, lwd = 0.4, border = NA, bty = "u",
-          col = colr2(100), xlab = "m", ylab = "v", zlab = " ",
-          label.rotation = list(z = 90), add = TRUE,
-          colkey = FALSE, depth_mask = FALSE)
-  scatter3D(x = m_blup, y = v_blup, z = w_blup +0.3, colkey = FALSE,
-            col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-  scatter3D(x = m_blup, y = v_blup, w_blup+0.3, colkey = FALSE,
-            col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-  scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.3, add = TRUE, 
-            pch = 16, col = "orange", cex=1)
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
   
-  #2D surface
-  par(mar = c(4,3,3,3))
-  curve(Wh(m = x, v = -0.4), from = -0.4, to = 0.4, col = "light blue", lwd = 3,
-        xlab = "mean clutch size (mu)", ylab = "hatchling success", ylim = c(1,6))
-  curve(Wh(m = x, v= 0), from = -0.4, to = 0.4, add = TRUE,  col = "blue", lwd = 3)
-  curve(Wh(m = x, v= 0.4), from = -0.4, to = 0.4, add = TRUE,  col = "dark blue", lwd = 3)
-  legend("top", legend=c("Low sigma", "Average sigma", "High sigma"),
-         col=c("light blue", "blue", "dark blue"), horiz = T, lty=1, lwd = 2, cex=0.7)
-  dev.off()
-}
-
-#LY
-{
-m_blup = apply(samplesLY$I_c[,,1], 2, median)
-v_blup = apply(samplesLY$I_c[,,2], 2, median)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
-      
-      m * median(samplesLY$b_h[,1]) + #linear selection coef
-      v *  median(samplesLY$b_h[,2]) + #inverse scale for disc
-      m^2 * median(samplesLY$q_h[,1]) + #nonlin selection coef
-      v^2 * median(samplesLY$q_h[,2]) +
-      m * v *   median(samplesLY$q_h[,3]) #inverse scale disc
-  )  
-  nthres = stan_data_LY$nthres_hatch
-  disc = median(exp(samplesLY$int_h))
-  p = matrix(NA, nrow = length(eta), ncol = nthres+1)
-  for(j in 1:nthres){
-    if(j == 1){p[,j] = logistic( disc * (median(samplesLY$mu_h_0[,j]) - eta) ) }
-    else p[,j] = logistic( disc * (median(samplesLY$mu_h_0[,j]) - eta) ) - 
-        logistic( disc * (median(samplesLY$mu_h_0[,j-1]) - eta) )
-  }
-  p[,nthres+1] = 1 - rowSums(p[,1:nthres])
-  
-  #predict expected hatchling counts
-  eggcount = seq(1:(nthres+1)) #total number of eggs possible
-  W = apply(p, 1, FUN = function(x) sum(x * eggcount) - 1) #-1 for original scale
-  return(W) #mean fitness 
-}
-
-w_blup = Wh(m_blup,v_blup)
-
-#extrapolated landscape
-sd_m = median(samplesKY$sd_I_c[,1])
-sd_v = median(samplesKY$sd_I_c[,2])
-m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
-w = outer(X = m, Y = v, FUN = Wh)
-
-#observed landscape
-m2 = seq(min(m_blup) - 0.04 , max(m_blup) + 0.04, by = 0.04)
-v2 = seq(min(v_blup) - 0.1 , max(v_blup) + 0.1, by = 0.1)
-w2 =  outer(X = m2, Y = v2, FUN = Wh)
-
-pop = seq(min(w_blup),max(w_blup),0.04)
-
-library(plot3D)
-png("surface_h_LY.png", units = "in", width = 10, height = 4, res = 600)
-par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(1,2))
-wd3=Wh(m, v = 0)
-colr = colorRampPalette(c("white","darkorchid4"))
-colr2 = colorRampPalette(c("white","darkorchid1"))
-persp3D(x = m, y = v, z = w - 0.14, lwd = 0.4, border = NA, bty = "u",
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nhatchling success",
-        label.rotation = list(z = 90), phi = 20, theta = 300,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-persp3D(x = m2, y = v2, z = w2, lwd = 0.4, border = NA, bty = "u",
-        col = colr2(100), xlab = "m", ylab = "v", zlab = " ",
-        label.rotation = list(z = 90), add = TRUE,
-        colkey = FALSE, depth_mask = FALSE)
-scatter3D(x = m_blup, y = v_blup, z = w_blup +0.3, colkey = FALSE,
-          col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-scatter3D(x = m_blup, y = v_blup, w_blup+0.3, colkey = FALSE,
-          col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.3, add = TRUE, 
-          pch = 16, col = "orange", cex=1)
-
-#2D surface
-par(mar = c(4,3,3,3))
-curve(Wh(m = x, v = -0.4), from = -0.4, to = 0.4, col = "light blue", lwd = 3,
-      xlab = "mean clutch size (mu)", ylab = "hatchling success", ylim = c(1,6))
-curve(Wh(m = x, v= 0), from = -0.4, to = 0.4, add = TRUE,  col = "blue", lwd = 3)
-curve(Wh(m = x, v= 0.4), from = -0.4, to = 0.4, add = TRUE,  col = "dark blue", lwd = 3)
-legend("top", legend=c("Low sigma", "Average sigma", "High sigma"),
-       col=c("light blue", "blue", "dark blue"), horiz = T, lty=1, lwd = 2, cex=0.7)
-dev.off()
-}
-
-#mass plot
-
-#KY
-{
-  m_blup = apply(samplesKY$I_c[,,1], 2, median)
-  v_blup = apply(samplesKY$I_c[,,2], 2, median)
-  
+  hb = apply(betas_sd_massKY,2,median)
+  hq = apply(gammas_sd_massKY,2,median)
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
-      median(samplesKY$mu_m_0)+
-      m * median(samplesKY$b_m[,1]) + #linear selection coef
-        v *  median(samplesKY$b_m[,2]) + #inverse scale for disc
-        m^2 * median(samplesKY$q_m[,1]) + #nonlin selection coef
-        v^2 * median(samplesKY$q_m[,2]) +
-        m * v *  median(samplesKY$q_m[,3]) #inverse scale disc
+      mean(stan_data_KY$mass)+
+        m * hb[1] + #linear selection coef
+        v * hb[2] + 
+        m^2 * hq[1] + #nonlin selection coef
+        v^2 * hq[2] +
+        m * v * hq[3]
     )  
-    return(eta) #mean fitness 
+    W = eta
+    return(W) #mean fitness 
   }
-  
   w_blup = Wh(m_blup,v_blup)
-  
-  #extrapolated landscape
-  sd_m = median(samplesKY$sd_I_c[,1])
-  sd_v = median(samplesKY$sd_I_c[,2])
-  m = seq(min(m_blup) - 2*sd_m , max(m_blup) + 2*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 2*sd_v, max(v_blup) + 2*sd_v, by = 0.1)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
   w = outer(X = m, Y = v, FUN = Wh)
+  pop = seq(min(w_blup),max(w_blup),0.05)
   
-  #observed landscape
-  m2 = seq(min(m_blup) - 0.04 , max(m_blup) + 0.04, by = 0.04)
-  v2 = seq(min(v_blup) - 0.1 , max(v_blup) + 0.1, by = 0.1)
-  w2 =  outer(X = m2, Y = v2, FUN = Wh)
-  
-  pop = seq(min(w_blup),max(w_blup),0.04)
-  
-  library(plot3D)
-  png("surface_m_KY.png", units = "in", width = 10, height = 4, res = 600)
-  par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(1,2))
-  wd3=Wh(m, v = 0)
-  colr = colorRampPalette(c("white","darkorchid4"))
-  colr2 = colorRampPalette(c("white","darkorchid1"))
-  persp3D(x = m, y = v, z = w - 0.10, lwd = 0.4, border = NA, bty = "u",
+  colr = colorRampPalette(c("white","deeppink1"))
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
           col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nnestling mass",
-          label.rotation = list(z = 90), phi = 30, theta = 300,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-  persp3D(x = m2, y = v2, z = w2 - 0.04, lwd = 0.4, border = NA, bty = "u",
-          col = colr2(100), xlab = "m", ylab = "v", zlab = " ",
-          label.rotation = list(z = 90), add = TRUE,
-          colkey = FALSE, depth_mask = FALSE)
-  scatter3D(x = m_blup, y = v_blup, z = w_blup , colkey = FALSE,
-            col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-  scatter3D(x = m_blup, y = v_blup, w_blup, colkey = FALSE,
-            col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-  scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.04, add = TRUE, 
-            pch = 16, col = "orange", cex=1)
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
   
-  #2D surface
-  par(mar = c(4,3,3,3))
-  curve(Wh(m = x, v = -0.4), from = -1, to = 1, col = "light blue", lwd = 3,
-        xlab = "mean clutch size (mu)", ylab = "nestling mass", ylim = c(0,2))
-  curve(Wh(m = x, v= 0), from = -1, to = 1, add = TRUE,  col = "blue", lwd = 3)
-  curve(Wh(m = x, v= 0.4), from = -1, to = 1, add = TRUE,  col = "dark blue", lwd = 3)
-  legend("top", legend=c("Low sigma", "Average sigma", "High sigma"),
-         col=c("light blue", "blue", "dark blue"), horiz = T, lty=1, lwd = 2, cex=0.7)
-  dev.off()
-}
-
-#LY
-{
-  m_blup = apply(samplesLY$I_c[,,1], 2, median)
-  v_blup = apply(samplesLY$I_c[,,2], 2, median)
-  
+  hb = apply(betas_sd_totalKY,2,median)
+  hq = apply(gammas_sd_totalKY,2,median)
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
-      median(samplesLY$mu_m_0)+
-        m * median(samplesLY$b_m[,1]) + #linear selection coef
-        v * median(samplesLY$b_m[,2]) + #inverse scale for disc
-        m^2 * median(samplesLY$q_m[,1]) + #nonlin selection coef
-        v^2 * median(samplesLY$q_m[,2]) +
-        m * v *  median(samplesLY$q_m[,3]) #inverse scale disc
-    )  
-    return(eta) #mean fitness 
-  }
-  
-  w_blup = Wh(m_blup,v_blup)
-  
-  #extrapolated landscape
-  sd_m = median(samplesLY$sd_I_c[,1])
-  sd_v = median(samplesLY$sd_I_c[,2])
-  m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
-  w = outer(X = m, Y = v, FUN = Wh)
-  
-  #observed landscape
-  m2 = seq(min(m_blup) - 0.01 , max(m_blup) + 0.01, by = 0.01)
-  v2 = seq(min(v_blup) - 0.01 , max(v_blup) + 0.01, by = 0.01)
-  w2 =  outer(X = m2, Y = v2, FUN = Wh)
-  
-  pop = seq(min(w_blup),max(w_blup),0.04)
-  
-  library(plot3D)
-  png("surface_m_LY.png", units = "in", width = 10, height = 4, res = 600)
-  par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(1,2))
-  wd3=Wh(m, v = 0)
-  colr = colorRampPalette(c("white","darkorchid4"))
-  colr2 = colorRampPalette(c("white","darkorchid1"))
-  persp3D(x = m, y = v, z = w - 0.1, lwd = 0.4, border = NA, bty = "u",
-          col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nnestling mass",
-          label.rotation = list(z = 90), phi = 20, theta = 300,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-  persp3D(x = m2, y = v2, z = w2, lwd = 0.4, border = NA, bty = "u",
-          col = colr2(100), xlab = "m", ylab = "v", zlab = " ",
-          label.rotation = list(z = 90), add = TRUE,
-          colkey = FALSE, depth_mask = FALSE)
-  scatter3D(x = m_blup, y = v_blup, z = w_blup +0.1, colkey = FALSE,
-            col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-  scatter3D(x = m_blup, y = v_blup, w_blup+0.1, colkey = FALSE,
-            col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-  scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.1, add = TRUE, 
-            pch = 16, col = "orange", cex=1)
-  
-  #2D surface
-  par(mar = c(4,3,3,3))
-  curve(Wh(m = x, v = -0.4), from = -1, to = 1, col = "light blue", lwd = 3,
-        xlab = "mean clutch size (mu)", ylab = "nestling mass", ylim = c(0,2))
-  curve(Wh(m = x, v= 0), from = -1, to = 1, add = TRUE,  col = "blue", lwd = 3)
-  curve(Wh(m = x, v= 0.4), from = -1, to = 1, add = TRUE,  col = "dark blue", lwd = 3)
-  legend("top", legend=c("Low sigma", "Average sigma", "High sigma"),
-         col=c("light blue", "blue", "dark blue"), horiz = T, lty=1, lwd = 2, cex=0.7)
-  dev.off()
-}
-
-
-#combo plot
-
-#KY
-{
-m_blup = apply(samplesKY$I_c[,,1], 2, median)
-v_blup = apply(samplesKY$I_c[,,2], 2, median)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
-    
-    m * median(samplesKY$b_h[,1]) + #linear selection coef
-      v * median(samplesKY$b_h[,2]) + #inverse scale for disc
-      m^2 * median(samplesKY$q_h[,1]) + #nonlin selection coef
-      v^2 * median(samplesKY$q_h[,2]) +
-      m * v *  median(samplesKY$q_h[,3]) #inverse scale disc
-  )  
-  nthres = stan_data_KY$nthres_hatch
-  disc = median(exp(samplesKY$int_h))
-  p = matrix(NA, nrow = length(eta), ncol = nthres+1)
-  for(j in 1:nthres){
-    if(j == 1){p[,j] = logistic( disc * (median(samplesKY$mu_h_0[,j]) - eta) ) }
-    else p[,j] = logistic( disc * (median(samplesKY$mu_h_0[,j]) - eta) ) - 
-        logistic( disc * (median(samplesKY$mu_h_0[,j-1]) - eta) )
-  }
-  p[,nthres+1] = 1 - rowSums(p[,1:nthres])
-  
-  #predict expected hatchling counts
-  eggcount = seq(1:(nthres+1)) #total number of eggs possible
-  W = apply(p, 1, FUN = function(x) sum(x * eggcount) - 1) #-1 for original scale
-  return(W) #mean fitness 
-}
-
-w_blup = Wh(m_blup,v_blup)
-
-#extrapolated landscape
-sd_m = median(samplesKY$sd_I_c[,1])
-sd_v = median(samplesKY$sd_I_c[,2])
-m = seq(min(m_blup) - 1*sd_m , max(m_blup) + 1*sd_m, by = 0.01)
-v = seq(min(v_blup) - 1*sd_v, max(v_blup) + 1*sd_v, by = 0.01)
-w = outer(X = m, Y = v, FUN = Wh)
-
-#observed landscape
-m2 = seq(min(m_blup) - 0.04 , max(m_blup) + 0.04, by = 0.01)
-v2 = seq(min(v_blup) - 0.1 , max(v_blup) + 0.1, by = 0.01)
-w2 =  outer(X = m2, Y = v2, FUN = Wh)
-
-pop = seq(min(w_blup),max(w_blup),0.04)
-
-library(plot3D)
-png("surface_KY.png", units = "in", width = 10, height = 4, res = 600)
-par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(1,2))
-wd3=Wh(m, v = 0)
-colr = colorRampPalette(c("white","darkorchid4"))
-colr2 = colorRampPalette(c("white","darkorchid1"))
-persp3D(x = m, y = v, z = w , lwd = 0.4, border = NA, bty = "u",
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nhatchling success",
-        label.rotation = list(z = 90), phi = 30, theta = 320,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-scatter3D(x = m_blup, y = v_blup, z = w_blup +0.3, colkey = FALSE,
-          col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-scatter3D(x = m_blup, y = v_blup, w_blup+0.3, colkey = FALSE,
-          col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.4, add = TRUE, 
-          pch = 16, col = "orange", cex=1)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
-    median(samplesKY$mu_m_0)+
-      m * median(samplesKY$b_m[,1]) + #linear selection coef
-      v *  median(samplesKY$b_m[,2]) + #inverse scale for disc
-      m^2 * median(samplesKY$q_m[,1]) + #nonlin selection coef
-      v^2 * median(samplesKY$q_m[,2]) +
-      m * v * median(samplesKY$q_m[,3]) #inverse scale disc
-  )  
-  return(eta) #mean fitness 
-}
-
-w_blup = Wh(m_blup,v_blup)
-
-#extrapolated landscape
-sd_m = median(samplesKY$sd_I_c[,1])
-sd_v = median(samplesKY$sd_I_c[,2])
-m = seq(min(m_blup) - 2*sd_m , max(m_blup) + 2*sd_m, by = 0.01)
-v = seq(min(v_blup) - 2*sd_v, max(v_blup) + 2*sd_v, by = 0.01)
-w = outer(X = m, Y = v, FUN = Wh)
-
-#observed landscape
-m2 = seq(min(m_blup) - 0.04 , max(m_blup) + 0.04, by = 0.01)
-v2 = seq(min(v_blup) - 0.1 , max(v_blup) + 0.1, by = 0.01)
-w2 =  outer(X = m2, Y = v2, FUN = Wh)
-
-pop = seq(min(w_blup),max(w_blup),0.04)
-
-wd3=Wh(m, v = 0)
-colr = colorRampPalette(c("white","darkorchid4"))
-colr2 = colorRampPalette(c("white","darkorchid1"))
-persp3D(x = m, y = v, z = w , lwd = 0.4, border = NA, bty = "u",
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nnestling mass",
-        label.rotation = list(z = 90), phi = 30, theta = 320,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-scatter3D(x = m_blup, y = v_blup, z = w_blup + 0.03 , colkey = FALSE,
-          col = alpha("black",0.4), pch = 16, cex = 1.1, add = TRUE)
-scatter3D(x = m_blup, y = v_blup, w_blup + 0.03, colkey = FALSE,
-          col = alpha("turquoise1",1), pch = 16, cex = 0.9, add = TRUE)
-scatter3D(x = c(0-0.04,0-0.04), y = c(0,0), z = Wh(m=c(0,0),v=c(0,0)) + 0.1, add = TRUE, 
-          pch = 16, col = "orange", cex=1)
-dev.off()
-}
-
-library(plot3D)
-{
-sd_m = median(samplesKY$sd_I_c[,1])
-sd_v = median(samplesKY$sd_I_c[,2])
-m_blup = apply(samplesKY$I_c[,,1], 2, median)
-m_blup = m_blup / sd_m
-v_blup = apply(samplesKY$I_c[,,2], 2, median)
-v_blup = v_blup / sd_v
-
-hb = apply(betas_sd_hatchKY,2,median)
-hq = apply(gammas_sd_hatchKY,2,median)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
-      mean(stan_data_KY$hatch - 1)+
-      m * hb[1] + #linear selection coef
-      v  * hb[2] + #inverse scale for disc
-      m^2 * hq[1] + #nonlin selection coef
-      v^2 * hq[2] +
-      m * v * hq[3] #inverse scale disc
-  )  
-  W = eta
-  return(W) #mean fitness 
-}
-w_blup = Wh(m_blup,v_blup)
-m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
-w = outer(X = m, Y = v, FUN = Wh)
-pop = seq(min(w_blup),max(w_blup),0.04)
-
-png("surface_KY.png", units = "in", width = 8, height = 4, res = 600)
-par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(2,3))
-colr = colorRampPalette(c("white","deeppink1"))
-persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nhatchling success",
-        label.rotation = list(z = 90), phi = 30, theta = 400,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-
-
-hb = apply(betas_sd_massKY,2,median)
-hq = apply(gammas_sd_massKY,2,median)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
-    mean(stan_data_KY$mass)+
-      m * hb[1] + #linear selection coef
-      v *  hb[2] + #inverse scale for disc
-      m^2 * hq[1] + #nonlin selection coef
-      v^2 * hq[2] +
-      m * v *  hq[3] #inverse scale disc
-  )  
-  W = eta
-  return(W) #mean fitness 
-}
-w_blup = Wh(m_blup,v_blup)
-m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
-w = outer(X = m, Y = v, FUN = Wh)
-pop = seq(min(w_blup),max(w_blup),0.04)
-
-colr = colorRampPalette(c("white","deeppink1"))
-persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nnestling mass",
-        label.rotation = list(z = 90), phi = 30, theta = 400,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-
-hb = apply(betas_sd_totalKY,2,median)
-hq = apply(gammas_sd_totalKY,2,median)
-
-Wh = function(m,v) {
-  eta =     ( #latent mean (zero-centered, no intercept)
       1 +
-      m * hb[1] + #linear selection coef
-      v * hb[2] + #inverse scale for disc
-      m^2 * hq[1] + #nonlin selection coef
-      v^2 * hq[2] +
-      m * v *  hq[3] #inverse scale disc
-  )  
-  W = eta
-  return(W) #mean fitness 
+        m * hb[1] + #linear selection coef
+        v * -1 * hb[2] + 
+        m^2 * hq[1] + #nonlin selection coef
+        v^2 * hq[2] +
+        m * v * hq[3]
+    )  
+    W = eta
+    return(W) #mean fitness 
+  }
+  w_blup = Wh(m_blup,v_blup)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
+  w = outer(X = m, Y = v, FUN = Wh)
+  pop = seq(min(w_blup),max(w_blup),0.05)
+  
+  colr = colorRampPalette(c("white","deeppink1"))
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
+          col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nfitness",
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
 }
-w_blup = Wh(m_blup,v_blup)
-m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
-w = outer(X = m, Y = v, FUN = Wh)
-pop = seq(min(w_blup),max(w_blup),0.04)
 
-colr = colorRampPalette(c("white","deeppink1"))
-persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
-        col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nfitness",
-        label.rotation = list(z = 90), phi = 30, theta = 400,
-        colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-}
 #LY
 {
   sd_m = median(samplesLY$sd_I_c[,1])
   sd_v = median(samplesLY$sd_I_c[,2])
   m_blup = apply(samplesLY$I_c[,,1], 2, median)
   m_blup = m_blup / sd_m
-  v_blup =  apply(samplesLY$I_c[,,2], 2, median)
+  v_blup = apply(samplesLY$I_c[,,2], 2, median)
   v_blup = v_blup / sd_v
   
   hb = apply(betas_sd_hatchLY,2,median)
   hq = apply(gammas_sd_hatchLY,2,median)
-  
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
       mean(stan_data_LY$hatch - 1)+
         m * hb[1] + #linear selection coef
-        v *  hb[2] + #inverse scale for disc
+        v * hb[2] + 
         m^2 * hq[1] + #nonlin selection coef
         v^2 * hq[2] +
-        m * v * hq[3] #inverse scale disc
+        m * v * hq[3]
     )  
     W = eta
     return(W) #mean fitness 
   }
   w_blup = Wh(m_blup,v_blup)
-  m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
   w = outer(X = m, Y = v, FUN = Wh)
-  pop = seq(min(w_blup),max(w_blup),0.04)
+  pop = seq(min(w_blup),max(w_blup),0.05)
   
   colr = colorRampPalette(c("white","purple"))
-  persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
           col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nhatchling success",
-          label.rotation = list(z = 90), phi = 30, theta = 400,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
   
   hb = apply(betas_sd_massLY,2,median)
   hq = apply(gammas_sd_massLY,2,median)
-  
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
       mean(stan_data_LY$mass)+
         m * hb[1] + #linear selection coef
-        v * hb[2] + #inverse scale for disc
+        v * hb[2] + 
         m^2 * hq[1] + #nonlin selection coef
         v^2 * hq[2] +
-        m * v * hq[3] #inverse scale disc
+        m * v * hq[3] 
     )  
     W = eta
     return(W) #mean fitness 
   }
   w_blup = Wh(m_blup,v_blup)
-  m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
   w = outer(X = m, Y = v, FUN = Wh)
-  pop = seq(min(w_blup),max(w_blup),0.04)
+  pop = seq(min(w_blup),max(w_blup),0.05)
   
   colr = colorRampPalette(c("white","purple"))
-  persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
           col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nnestling mass",
-          label.rotation = list(z = 90), phi = 30, theta = 400,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-  
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
+
   hb = apply(betas_sd_totalLY,2,median)
   hq = apply(gammas_sd_totalLY,2,median)
-  
   Wh = function(m,v) {
     eta =     ( #latent mean (zero-centered, no intercept)
       1 +
         m * hb[1] + #linear selection coef
-        v *  hb[2] + #inverse scale for disc
+        v * hb[2] +
         m^2 * hq[1] + #nonlin selection coef
         v^2 * hq[2] +
-        m * v *  hq[3] #inverse scale disc
+        m * v *  hq[3]
     )  
     W = eta
     return(W) #mean fitness 
   }
   w_blup = Wh(m_blup,v_blup)
-  m = seq(min(m_blup) - 1.4*sd_m , max(m_blup) + 1.4*sd_m, by = 0.04)
-  v = seq(min(v_blup) - 1.4*sd_v, max(v_blup) + 1.4*sd_v, by = 0.1)
+  m = seq(min(m_blup) - 1.5*sd_m , max(m_blup) + 1.5*sd_m, by = 0.05)
+  v = seq(min(v_blup) - 1.5*sd_v, max(v_blup) + 1.5*sd_v, by = 0.1)
   w = outer(X = m, Y = v, FUN = Wh)
-  pop = seq(min(w_blup),max(w_blup),0.04)
+  pop = seq(min(w_blup),max(w_blup),0.05)
   
   colr = colorRampPalette(c("white","purple"))
-  persp3D(x = m, y = v, z = w, lwd = 0.4, border = NA, bty = "u", 
+  persp3D(x = m, y = v, z = w, lwd = 0.5, border = NA, bty = "u", 
           col = colr(100), xlab = "mu", ylab = "sigma", zlab = "\nfitness",
-          label.rotation = list(z = 90), phi = 30, theta = 400,
-          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 40, drawlabels = TRUE))
-  
-  dev.off()
+          label.rotation = list(z = 90), phi = 30, theta = 500,
+          colkey = FALSE, depth_mask = FALSE, contour = list(nlevels = 50, drawlabels = TRUE))
 }
+
+dev.off()
+
 
 
 
