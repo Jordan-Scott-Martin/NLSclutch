@@ -1901,7 +1901,7 @@ ggsave("NLS_sdplot_tot.png", NLS_sdplot, height = 3, width = 8)
 
 #combo plot
 library(plot3D)
-png("surface_KY.png", units = "in", width = 8, height = 5, res = 600)
+png("surface plots.png", units = "in", width = 8, height = 5, res = 600)
 par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(2,3))
 
 #KY
@@ -2081,6 +2081,7 @@ par(mar = c(1.2,1.2,1.2,1.2), mfrow = c(2,3))
 }
 
 dev.off()
+
 
 
 
